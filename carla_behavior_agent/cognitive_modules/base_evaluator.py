@@ -104,46 +104,6 @@ class BaseEvaluator:
         sys._local_planner.set_speed(target_speed)
         return sys._local_planner.run_step(debug=debug)
 
-    def _process_tailgating(self, waypoint, vehicle_list):
-        """
-        Gestisce le dinamiche di inseguimento ravvicinato e valuta manovre evasive di cambio corsia.
-
-        Analizza la presenza di veicoli più lenti immediatamente davanti all'ego-vehicle. Se 
-        le condizioni di viabilità lo permettono (es. linee di demarcazione tratteggiate) e 
-        le corsie adiacenti sono libere da ostacoli, il metodo innesca proattivamente una manovra 
-        di sorpasso verso la corsia di destra o sinistra per risolvere la situazione di congestione 
-        (tailgating resolution).
-
-        Args:
-            waypoint (carla.Waypoint): Il waypoint corrente su cui si trova l'ego-vehicle.
-            vehicle_list (list): Lista degli attori di tipo veicolo presenti nell'ambiente simulato.
-        """
-        sys = self.core_system
-        left_turn = waypoint.left_lane_marking.lane_change
-        right_turn = waypoint.right_lane_marking.lane_change
-        left_wpt = waypoint.get_left_lane()
-        right_wpt = waypoint.get_right_lane()
-        speed_limit = sys._vehicle.get_speed_limit()
-
-        behind_v_state, behind_v, _ = sys._vehicle_obstacle_detected(
-            vehicle_list, max(sys._behavior.min_proximity_threshold, speed_limit / 2))
-
-        if behind_v_state and sys._speed < get_speed(behind_v):
-            if (
-                    right_turn == carla.LaneChange.Right or right_turn == carla.LaneChange.Both) and waypoint.lane_id * right_wpt.lane_id > 0 and right_wpt.lane_type == carla.LaneType.Driving:
-                new_v_state, _, _ = sys._vehicle_obstacle_detected(vehicle_list, max(sys._behavior.min_proximity_threshold, speed_limit / 2))
-                if not new_v_state:
-                    print("[Cognition] -> Engaging right evasion to clear lane.")
-                    sys._behavior.tailgate_counter = 200
-                    sys.set_destination(sys._local_planner.target_waypoint.transform.location,
-                                        right_wpt.transform.location)
-            elif left_turn == carla.LaneChange.Left and waypoint.lane_id * left_wpt.lane_id > 0 and left_wpt.lane_type == carla.LaneType.Driving:
-                new_v_state, _, _ = sys._vehicle_obstacle_detected(vehicle_list, max(sys._behavior.min_proximity_threshold, speed_limit / 2), lane_offset=-1)
-                if not new_v_state:
-                    print("[Cognition] -> Engaging left evasion to clear lane.")
-                    sys._behavior.tailgate_counter = 200
-                    sys.set_destination(sys._local_planner.target_waypoint.transform.location, left_wpt.transform.location)
-
     def scan_for_traffic(self, waypoint):
         """
         Scansiona l'ambiente circostante per rilevare flotte di veicoli o ciclisti.
@@ -194,8 +154,6 @@ class BaseEvaluator:
                     if v_obj.get_location().distance(
                             proj_lane.get_left_lane().transform.location) > sys._vehicle.bounding_box.extent.y + v_obj.bounding_box.extent.y:
                         return False, None, -1
-            if not v_state and sys._direction == RoadOption.LANEFOLLOW and not waypoint.is_junction and sys._speed > 10 and sys._behavior.tailgate_counter == 0:
-                self._process_tailgating(waypoint, v_list)
 
         return v_state, v_obj, v_dist
 
